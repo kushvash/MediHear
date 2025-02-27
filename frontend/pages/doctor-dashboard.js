@@ -1,77 +1,10 @@
-// // pages/doctor-dashboard.js
-// import { useState } from "react";
-// import ProtectedRoute from "../components/ProtectedRoute";
-// import VideoCall from "../components/VideoCall";
-// import { useSocket } from "../context/SocketContext";
-
-// export default function DoctorDashboard() {
-//   const [patientEmail, setPatientEmail] = useState("");
-//   const [roomId, setRoomId] = useState("");
-//   const [callStarted, setCallStarted] = useState(false);
-//   const socket = useSocket();
-
-//   const handleStartCall = () => {
-//     if (!socket) {
-//       console.error("Socket not initialized.");
-//       alert("Connection not established. Please wait.");
-//       return;
-//     }
-  
-//     if (!patientEmail) {
-//       alert("Please enter a patient email.");
-//       return;
-//     }
-  
-//     const generatedRoomId = `call-${patientEmail.replace(/[@.]/g, "")}`;
-//     setRoomId(generatedRoomId);
-//     setCallStarted(true);
-  
-//     if (socket.connected) {
-//       socket.emit("call-patient", { roomId: generatedRoomId, patientEmail });
-//     } else {
-//       socket.once("connect", () => {
-//         socket.emit("call-patient", { roomId: generatedRoomId, patientEmail });
-//       });
-//     }
-//   };
-
-//   return (
-//     <ProtectedRoute allowedRoles={["doctor"]}>
-//       <div className="p-6 space-y-4">
-//         <h1 className="text-3xl font-bold">Doctor Dashboard</h1>
-
-//         {!callStarted ? (
-//           <>
-//             <input
-//               type="email"
-//               value={patientEmail}
-//               onChange={(e) => setPatientEmail(e.target.value)}
-//               placeholder="Enter patient email"
-//               className="w-full p-2 border rounded"
-//             />
-//             <button
-//               onClick={handleStartCall}
-//               className="w-full p-2 bg-green-500 text-white rounded"
-//             >
-//               Start Call
-//             </button>
-//           </>
-//         ) : (
-//           <VideoCall roomId={roomId} isCaller={true} />
-//         )}
-//       </div>
-//     </ProtectedRoute>
-//   );
-// }
-
-
-
 // pages/doctor-dashboard.js
 import { useState, useEffect } from "react";
 import ProtectedRoute from "../components/ProtectedRoute";
 import VideoCall from "../components/VideoCall";
 import { useSocket } from "../context/SocketContext";
 import axios from "axios";
+import { useRouter } from "next/router";
 
 const SYMPTOM_API_URL = "http://127.0.0.1:5002/extract-symptoms";
 
@@ -82,13 +15,14 @@ export default function DoctorDashboard() {
   const [transcript, setTranscript] = useState("");
   const [symptoms, setSymptoms] = useState([]);
   const socket = useSocket();
+  const router = useRouter();
 
   useEffect(() => {
     if (!socket) return;
 
     socket.on("transcription-result", ({ transcript }) => {
       setTranscript(transcript);
-      extractSymptoms(transcript); // Call symptom extraction
+      extractSymptoms(transcript);
     });
 
     return () => {
@@ -112,19 +46,29 @@ export default function DoctorDashboard() {
     setRoomId(generatedRoomId);
     setCallStarted(true);
 
-    if (socket.connected) {
-      socket.emit("call-patient", { roomId: generatedRoomId, patientEmail });
-    } else {
-      socket.once("connect", () => {
-        socket.emit("call-patient", { roomId: generatedRoomId, patientEmail });
-      });
-    }
+    socket.emit("call-patient", { roomId: generatedRoomId, patientEmail });
+  };
+
+  const handleEndCall = () => {
+    socket.emit("end-call", { roomId });
+    setCallStarted(false);
+    setRoomId("");
+    setTranscript("");
+    setSymptoms([]);
+  };
+
+  const handleLogout = () => {
+    localStorage.clear();
+    router.push("/login");
   };
 
   return (
     <ProtectedRoute allowedRoles={["doctor"]}>
       <div className="p-6 space-y-4">
-        <h1 className="text-3xl font-bold">Doctor Dashboard</h1>
+        <div className="flex justify-between">
+          <h1 className="text-3xl font-bold">Doctor Dashboard</h1>
+          <button onClick={handleLogout} className="p-2 bg-red-500 text-white rounded">Logout</button>
+        </div>
 
         {!callStarted ? (
           <>
@@ -135,15 +79,17 @@ export default function DoctorDashboard() {
               placeholder="Enter patient email"
               className="w-full p-2 border rounded"
             />
-            <button
-              onClick={handleStartCall}
-              className="w-full p-2 bg-green-500 text-white rounded"
-            >
+            <button onClick={handleStartCall} className="w-full p-2 bg-green-500 text-white rounded">
               Start Call
             </button>
           </>
         ) : (
-          <VideoCall roomId={roomId} isCaller={true} />
+          <>
+            <VideoCall roomId={roomId} isCaller={true} />
+            <button onClick={handleEndCall} className="w-full p-2 bg-red-600 text-white rounded">
+              End Call
+            </button>
+          </>
         )}
 
         <div className="p-4 border rounded-lg bg-gray-100">

@@ -68,6 +68,11 @@ io.on("connection", (socket) => {
     console.log(`📝 Transcription received: ${transcript}`);
     io.to(roomId).emit("transcription-result", { transcript });
   });
+
+  socket.on("end-call", ({ roomId }) => {
+    console.log(`☎️ Call ended for room: ${roomId}`);
+    io.to(roomId).emit("end-call");
+  });
 });
 
 const PORT = process.env.PORT || 5001;
