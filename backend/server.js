@@ -1,3 +1,4 @@
+// server.js
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
@@ -8,15 +9,42 @@ app.use(cors());
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: { origin: "*" },
+  cors: {
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST"],
+  },
+  transports: ["websocket"], // ✅ Force WebSocket transport
 });
+
 
 io.on("connection", (socket) => {
   console.log(`✅ User connected: ${socket.id}`);
 
+  socket.on("join-patient", (email) => {
+    socket.join(email);
+    console.log(`🔔 Patient joined: ${email} (Socket: ${socket.id})`);
+  });
+
+  socket.on("call-patient", ({ roomId, patientEmail }) => {
+    console.log(`📞 Calling patient: ${patientEmail}`);
+    io.to(patientEmail).emit("incoming-call", { roomId });
+  });
+
+  socket.on("call-accepted", ({ roomId }) => {
+    console.log(`✅ Call accepted for room: ${roomId}`);
+    io.to(roomId).emit("call-accepted");
+  });
+
+  socket.on("call-rejected", ({ roomId }) => {
+    console.log(`❌ Call rejected for room: ${roomId}`);
+    io.to(roomId).emit("call-rejected");
+  });
+
   socket.on("join-room", (roomId) => {
-    socket.join(roomId);
-    console.log(`🔔 User ${socket.id} joined room: ${roomId}`);
+    if (!socket.rooms.has(roomId)) {
+      socket.join(roomId);
+      console.log(`🔔 ${socket.id} joined room: ${roomId}`);
+    }
   });
 
   socket.on("send-offer", ({ roomId, offer }) => {
@@ -31,14 +59,14 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("receive-ice-candidate", candidate);
   });
 
-  // ✅ Added: Handle transcription and broadcast to room
-  socket.on("transcription-result", ({ roomId, transcript }) => {
-    console.log(`📝 Transcription received: ${transcript}`);
-    socket.to(roomId).emit("transcription-result", { transcript });
+  socket.on("disconnect", () => {
+    console.log(`❌ User disconnected: ${socket.id}`);
   });
 
-  socket.on("disconnect", () => {
-    console.log(`User disconnected: ${socket.id}`);
+  // Forward transcription to the doctor
+  socket.on("transcription-result", ({ roomId, transcript }) => {
+    console.log(`📝 Transcription received: ${transcript}`);
+    io.to(roomId).emit("transcription-result", { transcript });
   });
 });
 
